@@ -67,6 +67,7 @@ class HyperparameterSensitivityLinearApproximation:
         validate_optimum=False,
         hessian_at_opt=None,
         cross_hess_at_opt=None,
+        hess_solver = None,
         hyper_par_objective_fun=None,
         grad_tol=1e-8):
         """
@@ -130,12 +131,14 @@ class HyperparameterSensitivityLinearApproximation:
         self.set_base_values(
             opt_par_value, hyper_par_value,
             hessian_at_opt, cross_hess_at_opt,
+            hess_solver,
             validate_optimum=validate_optimum,
             grad_tol=self._grad_tol)
 
     def set_base_values(self,
                         opt_par_value, hyper_par_value,
                         hessian_at_opt, cross_hess_at_opt,
+                        hess_solver,
                         validate_optimum=True, grad_tol=None):
 
         # Set the values of the optimal parameters.
@@ -143,14 +146,17 @@ class HyperparameterSensitivityLinearApproximation:
         self._hyper0 = deepcopy(hyper_par_value)
 
         # Set the values of the Hessian at the optimum.
-        if hessian_at_opt is None:
-            self._hess0 = self._obj_fun_hessian(self._opt0, self._hyper0)
-        else:
-            self._hess0 = hessian_at_opt
-        if self._hess0.shape != (len(self._opt0), len(self._opt0)):
-            raise ValueError('``hessian_at_opt`` is the wrong shape.')
+        if hess_solver is None:
+            if hessian_at_opt is None:
+                self._hess0 = self._obj_fun_hessian(self._opt0, self._hyper0)
+            else:
+                self._hess0 = hessian_at_opt
+            if self._hess0.shape != (len(self._opt0), len(self._opt0)):
+                raise ValueError('``hessian_at_opt`` is the wrong shape.')
 
-        self.hess_solver = solver_lib.get_cholesky_solver(self._hess0)
+            self.hess_solver = solver_lib.get_cholesky_solver(self._hess0)
+        else:
+            self.hess_solver = hess_solver
 
         if validate_optimum:
             if grad_tol is None:
@@ -176,7 +182,10 @@ class HyperparameterSensitivityLinearApproximation:
             raise ValueError('``cross_hess_at_opt`` is the wrong shape.')
 
         self._sens_mat = -1 * self.hess_solver(self._cross_hess)
-
+        if len(self._sens_mat.shape) == 1:
+            # add a dimension
+            assert len(self._sens_mat) == len(self._opt0)
+            self._sens_mat = self._sens_mat[:, None]
 
     # Methods:
     def get_dopt_dhyper(self):
